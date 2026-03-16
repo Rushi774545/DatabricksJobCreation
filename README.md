@@ -1,362 +1,174 @@
-1️⃣ Prepare Your Hourly Notebook
+Creating Databricks Jobs for Hourly and Daily Stock Ingestion
 
-Your notebook should contain the full pipeline code like:
+This project uses Databricks Workflows (Jobs) to automatically run notebooks that fetch stock data using yfinance and store it in Delta tables inside Unity Catalog (workspace.default).
 
-%pip install yfinance
+Two automated jobs are created:
 
-import yfinance as yf
-import pandas as pd
+Hourly Stock Job → runs every 1 hour
 
-tickers = [
-"AAPL","MSFT","GOOGL","AMZN","TSLA",
-"META","NVDA","JPM","V","NFLX"
-]
+Daily Stock Job → runs once per day
 
-all_data = []
+1. Create Hourly Stock Job
+Step 1: Open Workflows
 
-for ticker in tickers:
+Go to the Databricks Workspace.
 
-    df = yf.download(
-        ticker,
-        period="1d",
-        interval="1h"
-    )
-
-    df = df.reset_index()
-
-    # Fix multi index columns
-    df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-
-    df["ticker"] = ticker
-
-    all_data.append(df)
-
-final_df = pd.concat(all_data)
-
-final_df.columns = [
-    c.lower().replace(" ", "_") for c in final_df.columns
-]
-
-spark_df = spark.createDataFrame(final_df)
-
-spark.sql("USE CATALOG workspace")
-spark.sql("USE SCHEMA default")
-
-spark_df.write \
-    .format("delta") \
-    .mode("append") \
-    .saveAsTable("hourly_stock_data")
-
-Save this notebook as:
-
-hourly_stock_pipeline
-2️⃣ Go to Databricks Jobs
-
-Left sidebar:
+In the left sidebar click:
 
 Workflows
 
 Click:
 
 Create Job
-3️⃣ Configure Job
+Step 2: Configure Job Details
 
-Fill these fields.
+Set the following:
 
-Job Name
-Hourly Stock Ingestion
-Task
+Job Name: Hourly Stock Ingestion
+Step 3: Add Task
 
-Choose
-
-Notebook
-
-Select your notebook:
-
-hourly_stock_pipeline
-4️⃣ Choose Compute
-
-Select either:
-
-Serverless
-
-OR
-
-Existing Cluster
-
-Recommended for learning:
-
-Serverless
-5️⃣ Add Schedule (Important)
-
-Click Add Trigger
-
-Choose:
-
-Scheduled
-
-Set:
-
-Period → Hours
-Every → 1 Hour
-
-Example:
-
-Run every 1 hour
-
-Timezone:
-
-Asia/Kolkata
-6️⃣ Final Job Configuration
-
-Your job will look like:
-
-Job Name:
-Hourly Stock Ingestion
-
-Task:
-Notebook → hourly_stock_pipeline
-
-Compute:
-Serverless
-
-Schedule:
-Every 1 Hour
-
-Click:
-
-Create
-7️⃣ What Happens Now
-
-Every 1 hour Databricks will run:
-
-yfinance → pandas → spark → delta table
-
-and update:
-
-workspace.default.hourly_stock_data
-8️⃣ Check Job Runs
-
-Go to:
-
-Workflows → Job Runs
-
-You will see logs like:
-
-Succeeded
-Running
-Failed
-9️⃣ Check Updated Data
-
-Run in a notebook:
-
-spark.sql("""
-SELECT ticker, COUNT(*) 
-FROM workspace.default.hourly_stock_data
-GROUP BY ticker
-""").show()
-🔥 Important Improvement (Recommended)
-
-Right now you are re-downloading the same 1-day data every hour which will create duplicates.
-
-Better approach:
-
-Use MERGE or DropDuplicates.
-
-Example:
-
-spark_df = spark_df.dropDuplicates(["datetime","ticker"])
-
-before writing.
-
-🚀 Next Step (Very Important)
-
-Next you should create:
-
-Daily Stock Job
-
-Schedule:
-
-Run every 24 hours
-
-I can also show you a much more professional architecture used by real data engineers:
-
-Bronze Layer
-raw_stock_data
-
-Silver Layer
-clean_stock_data
-
-Gold Layer
-analytics tables
-
-This will make your Databricks project look production-level for interviews.
-
-If you want, I can also show you how to build the entire stock pipeline architecture.
-
-Daily Notebook
-
-Below is the complete setup for creating a Databricks Job for your DAILY stock data pipeline, similar to the hourly one but scheduled once per day.
-
-1️⃣ Prepare Your Daily Notebook
-
-Your notebook should contain the pipeline code that fetches daily stock prices and stores them in the Delta table daily_stock_data.
-
-%pip install yfinance
-
-import yfinance as yf
-import pandas as pd
-
-tickers = [
-"AAPL","MSFT","GOOGL","AMZN","TSLA",
-"META","NVDA","JPM","V","NFLX"
-]
-
-all_data = []
-
-for ticker in tickers:
-
-    df = yf.download(
-        ticker,
-        period="30d",
-        interval="1d"
-    )
-
-    df = df.reset_index()
-
-    # Fix multi-index columns
-    df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-
-    df["ticker"] = ticker
-
-    all_data.append(df)
-
-final_df = pd.concat(all_data)
-
-# Clean column names
-final_df.columns = [
-    c.lower().replace(" ", "_") for c in final_df.columns
-]
-
-spark_df = spark.createDataFrame(final_df)
-
-spark.sql("USE CATALOG workspace")
-spark.sql("USE SCHEMA default")
-
-# Remove duplicates before writing
-spark_df = spark_df.dropDuplicates(["date","ticker"])
-
-spark_df.write \
-    .format("delta") \
-    .mode("append") \
-    .saveAsTable("daily_stock_data")
-
-Save the notebook as:
-
-daily_stock_pipeline
-2️⃣ Go to Databricks Jobs
-
-Left sidebar → Workflows
-
-Click:
-
-Create Job
-3️⃣ Configure Job
-Job Name
-Daily Stock Ingestion
-Task Type
+Click Add Task
 
 Select:
 
 Notebook
 
-Choose notebook:
+Configure the task:
 
-daily_stock_pipeline
-4️⃣ Select Compute
+Task Name: hourly_stock_pipeline_task
+Notebook Path: /Workspace/hourly_stock_pipeline
+Step 4: Select Compute
 
-Choose one:
+Choose a compute resource:
+
+Serverless (Recommended)
+
+or
+
+Existing Cluster
+Step 5: Configure Schedule
+
+Click:
+
+Add Trigger
+
+Choose:
+
+Scheduled
+
+Set the schedule:
+
+Period: Hours
+Every: 1 Hour
+Timezone: Asia/Kolkata
+
+This will run the pipeline every hour.
+
+Step 6: Create Job
+
+Click:
+
+Create
+
+The job will now automatically update the table:
+
+workspace.default.hourly_stock_data
+2. Create Daily Stock Job
+Step 1: Open Workflows
+
+Navigate to:
+
+Workflows → Create Job
+Step 2: Configure Job Details
+
+Set:
+
+Job Name: Daily Stock Ingestion
+Step 3: Add Task
+
+Select:
+
+Notebook
+
+Configure:
+
+Task Name: daily_stock_pipeline_task
+Notebook Path: /Workspace/daily_stock_pipeline
+Step 4: Select Compute
+
+Choose:
 
 Serverless
 
 or
 
 Existing Cluster
+Step 5: Configure Schedule
 
-For most users:
+Click:
 
-Serverless
-5️⃣ Add Schedule
+Add Trigger → Scheduled
 
-Click Add Trigger
+Set:
 
-Select:
-
-Scheduled
-
-Configure:
-
-Period → Days
-Every → 1 Day
-
-Example schedule:
-
-Run every day at 18:00
-Timezone → Asia/Kolkata
-
-This means your pipeline runs once per day.
-
-6️⃣ Final Job Configuration
-
-Your job should look like this:
-
-Job Name:
-Daily Stock Ingestion
-
-Task:
-Notebook → daily_stock_pipeline
-
-Compute:
-Serverless
-
-Schedule:
-Every 1 Day
+Period: Days
+Every: 1 Day
+Time: 18:00
 Timezone: Asia/Kolkata
+
+This will run the pipeline once every day.
+
+Step 6: Create Job
 
 Click:
 
 Create
-7️⃣ What Happens Now
 
-Every 24 hours, Databricks will run:
-
-yfinance → pandas → spark → delta table
-
-and update:
+The job will now automatically update the table:
 
 workspace.default.daily_stock_data
-8️⃣ Verify Data Updates
+3. Verify Job Execution
 
-Run this query in a notebook:
+To monitor job runs:
 
-spark.sql("""
+Go to:
+
+Workflows
+
+Select the job:
+
+Hourly Stock Ingestion
+or
+Daily Stock Ingestion
+
+View the Runs tab to check:
+
+Running
+Succeeded
+Failed
+4. Verify Updated Data
+
+Run the following query in a Databricks notebook:
+
+SELECT ticker, COUNT(*) 
+FROM workspace.default.hourly_stock_data
+GROUP BY ticker;
+
+or
+
 SELECT ticker, COUNT(*) 
 FROM workspace.default.daily_stock_data
-GROUP BY ticker
-""").show()
-9️⃣ Final Project Structure
-
-Your Databricks project should now look like:
-
-Databricks Workspace
+GROUP BY ticker;
+Final Architecture
+Databricks Workflows
         │
-        ├── hourly_stock_pipeline notebook
-        │       ↓
-        │   Job → Runs every 1 hour
+        ├── Hourly Stock Job
+        │        │
+        │        └── hourly_stock_pipeline notebook
         │
-        ├── daily_stock_pipeline notebook
-        │       ↓
-        │   Job → Runs every 24 hours
+        ├── Daily Stock Job
+        │        │
+        │        └── daily_stock_pipeline notebook
         │
         ▼
 Unity Catalog
